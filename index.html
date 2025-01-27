@@ -1094,7 +1094,8 @@
                 habitationCards: {},
                 history: [],
                 continentStates: this.initializeContinentStates(),
-                weatherEvents: []
+                weatherEvents: [],
+                activeContinent: 'Europe' // Ajout de l'état du continent actif
             };
 
             this.weatherManager = new WeatherEventManager(gameData);
@@ -1217,18 +1218,17 @@
         }
 
         startTurn() {
-            // Réinitialise le timer
+            // Réinitialise le timer pour toutes les équipes
             this.resetTimer();
             this.startTimer();
 
-            // Génère les événements météo pour ce tour
+            // Génère deux événements météo aléatoires
             this.gameState.weatherEvents = this.weatherManager.generateWeatherEvents();
-
-            // Affiche les nouveaux événements météo
             this.displayWeatherEvents();
 
             // Met à jour l'interface
             this.updateDisplay();
+            this.addToHistory(`Début du tour ${this.gameState.currentTurn}`);
         }
 
         displayWeatherEvents() {
