@@ -1086,19 +1086,18 @@
     // Classe principale pour gérer le jeu
     class EkokaoGame {
         constructor() {
-            console.log('Initialisation du jeu'); // Debug
             this.gameState = {
                 currentMonth: 1,
                 currentTurn: 1,
-                activeTeam: 'weather',
-                activeContinent: 'Europe',
                 timer: 180,
                 isTimerRunning: false,
-                habitationCards: {}, // Stockage des cartes par continent
-                history: []
+                habitationCards: {},
+                history: [],
+                continentStates: this.initializeContinentStates(),
+                weatherEvents: []
             };
 
-            // Initialisation du gestionnaire de cartes
+            this.weatherManager = new WeatherEventManager(gameData);
             this.habitationManager = new HabitationDeckManager(gameData);
 
             this.initializeEventListeners();
@@ -1195,17 +1194,61 @@
 
         // Gestion des événements
         initializeEventListeners() {
-            // Timer controls
-            document.getElementById('startTimer').addEventListener('click', () => this.startTimer());
-            document.getElementById('pauseTimer').addEventListener('click', () => this.pauseTimer());
-            document.getElementById('resetTimer').addEventListener('click', () => this.resetTimer());
+            // Existing timer controls
+            document.getElementById('startTimer')?.addEventListener('click', () => this.startTimer());
+            document.getElementById('pauseTimer')?.addEventListener('click', () => this.pauseTimer());
+            document.getElementById('resetTimer')?.addEventListener('click', () => this.resetTimer());
 
             // Game controls
-            document.getElementById('nextTurn').addEventListener('click', () => this.nextTurn());
-            document.getElementById('saveGame').addEventListener('click', () => this.saveGame());
-            document.getElementById('loadGame').addEventListener('click', () => this.loadGame());
-            document.getElementById('drawHabitationBtn').addEventListener('click', () => {
-                this.drawHabitationCard();
+            document.getElementById('nextTurn')?.addEventListener('click', () => this.nextTurn());
+            document.getElementById('saveGame')?.addEventListener('click', () => this.saveGame());
+            document.getElementById('loadGame')?.addEventListener('click', () => this.loadGame());
+            document.getElementById('drawHabitationBtn')?.addEventListener('click', () => this.drawHabitationCard());
+
+            // Add continent button listeners
+            const continentButtons = document.getElementById('continentButtons');
+            if (continentButtons) {
+                continentButtons.querySelectorAll('button').forEach(button => {
+                    button.addEventListener('click', () => {
+                        this.setActiveContinent(button.dataset.continent);
+                    });
+                });
+            }
+        }
+
+        startTurn() {
+            // Réinitialise le timer
+            this.resetTimer();
+            this.startTimer();
+
+            // Génère les événements météo pour ce tour
+            this.gameState.weatherEvents = this.weatherManager.generateWeatherEvents();
+
+            // Affiche les nouveaux événements météo
+            this.displayWeatherEvents();
+
+            // Met à jour l'interface
+            this.updateDisplay();
+        }
+
+        displayWeatherEvents() {
+            const weatherContainer = document.getElementById('weatherCards');
+            if (!weatherContainer) return;
+
+            weatherContainer.innerHTML = '';
+
+            this.gameState.weatherEvents.forEach(event => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'game-card weather-card mb-3';
+                cardElement.innerHTML = `
+                <div class="d-flex justify-content-between align-items-top">
+                    <h5 class="mb-2">${event.event.name}</h5>
+                    <span class="badge bg-danger">Puissance: ${event.power}</span>
+                </div>
+                <h6 class="mb-2">Continent: ${event.continent}</h6>
+                <p class="mb-2">${event.event.description}</p>
+            `;
+                weatherContainer.appendChild(cardElement);
             });
         }
 
@@ -1253,28 +1296,58 @@
 
         // Gestion des tours
         nextTurn() {
-            // Réinitialiser le timer
-            this.resetTimer();
-
-            // Mettre à jour le tour et le mois
             if (this.gameState.currentTurn < 24) {
                 this.gameState.currentTurn++;
+
+                // Change de mois tous les 2 tours
                 if (this.gameState.currentTurn % 2 === 1) {
                     this.gameState.currentMonth = Math.min(this.gameState.currentMonth + 1, 12);
                 }
 
-                // Alterner entre météo et habitat
-                this.gameState.activeTeam = this.gameState.activeTeam === 'weather' ? 'habitat' : 'weather';
+                // Démarre le nouveau tour
+                this.startTurn();
 
-                // Mettre à jour le continent actif si nécessaire
-                if (this.gameState.activeTeam === 'weather') {
-                    this.updateActiveContinent();
-                }
-
-                // Mettre à jour l'affichage
-                this.updateDisplay();
-                this.addToHistory(`Tour ${this.gameState.currentTurn}: ${this.gameState.activeTeam} joue`);
+                this.addToHistory(`Début du tour ${this.gameState.currentTurn} (Mois ${this.gameState.currentMonth})`);
             }
+        }
+
+        applyWeatherDamage() {
+            this.gameState.weatherEvents.forEach(event => {
+                const continent = event.continent;
+                const continentState = this.gameState.continentStates[continent];
+
+                if (continentState) {
+                    // Calcule les dégâts en fonction de la puissance et des protections
+                    const damage = this.calculateDamage(event.power, continentState.protections);
+
+                    // Applique les dégâts
+                    continentState.health = Math.max(0, continentState.health - damage);
+
+                    this.addToHistory(`${event.event.name} cause ${damage} dégâts à ${continent}`);
+                }
+            });
+
+            this.updateDisplay();
+        }
+
+        endTurn() {
+            // Applique les dégâts météo
+            this.applyWeatherDamage();
+
+            // Passe au tour suivant
+            this.nextTurn();
+        }
+
+        calculateDamage(power, protections) {
+            // Base des dégâts est la puissance de l'événement
+            let damage = power;
+
+            // Réduit les dégâts en fonction des protections
+            protections.forEach(protection => {
+                damage = Math.max(0, damage - protection.effect);
+            });
+
+            return damage;
         }
 
         // Mise à jour du continent actif
@@ -1331,34 +1404,15 @@
 
         // Mises à jour de l'affichage
         updateDisplay() {
-            // Vérification des éléments avant mise à jour
-            const elements = {
-                month: document.getElementById('currentMonth'),
-                turn: document.getElementById('currentTurn'),
-                activeTeam: document.getElementById('activeTeam'),
-                activeContinent: document.getElementById('activeContinent'),
-                timer: document.getElementById('timer')
-            };
+            // Met à jour l'affichage du tour et du mois
+            document.getElementById('currentMonth')?.textContent = `${this.gameState.currentMonth}/12`;
+            document.getElementById('currentTurn')?.textContent = `${this.gameState.currentTurn}/24`;
 
-            // Vérifie que tous les éléments existent
-            for (const [key, element] of Object.entries(elements)) {
-                if (!element) {
-                    console.error(`Element ${key} not found`);
-                    return;
-                }
-            }
+            // Met à jour l'affichage des cartes météo
+            this.displayWeatherEvents();
 
-            // Met à jour les éléments
-            elements.month.textContent = `${this.gameState.currentMonth}/12`;
-            elements.turn.textContent = `${this.gameState.currentTurn}/24`;
-            elements.activeTeam.textContent = this.gameState.activeTeam === 'weather' ? 'Météo' : 'Habitat';
-            elements.activeContinent.textContent = this.gameState.activeContinent;
-
-            // Met à jour l'affichage du timer séparément
-            this.updateTimerDisplay();
-
-            // Met à jour l'affichage des continents
-            this.updateContinentDisplay();
+            // Met à jour l'affichage des habitations
+            this.updateHabitationDisplay();
 
             // Met à jour l'historique
             this.updateHistoryDisplay();
@@ -1459,11 +1513,54 @@
         }
     }
 
+    // Weather
+    class WeatherEventManager {
+        constructor(gameData) {
+            this.gameData = gameData;
+            this.continents = Object.keys(gameData.continents);
+        }
+
+        generateWeatherEvents() {
+            const events = [];
+
+            // Sélectionne deux continents aléatoires différents
+            const selectedContinents = this.selectRandomContinents(2);
+
+            selectedContinents.forEach(continent => {
+                const possibleEvents = this.gameData.continents[continent].catastrophes;
+                const event = possibleEvents[Math.floor(Math.random() * possibleEvents.length)];
+
+                events.push({
+                    continent: continent,
+                    event: event,
+                    power: this.calculateEventPower(event)
+                });
+            });
+
+            return events;
+        }
+
+        selectRandomContinents(count) {
+            const shuffled = [...this.continents].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, count);
+        }
+
+        calculateEventPower(event) {
+            // Calcule la puissance en fonction du mois actuel et d'autres facteurs
+            let power = event.basePower;
+            // Augmente progressivement la puissance au fil des mois
+            const monthModifier = Math.floor(game.gameState.currentMonth / 3);
+            power = Math.min(event.maxPower, power + monthModifier);
+            return power;
+        }
+    }
+
     // Initialisation du jeu
     const game = new EkokaoGame();
 
     // Rendre l'instance du jeu disponible globalement
     document.addEventListener('DOMContentLoaded', () => {
         window.game = new EkokaoGame();
+
     });
 </script>
