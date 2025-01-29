@@ -17,6 +17,7 @@ class Disaster:
     max_power: int
     disaster_type: str
     continent: str
+    base_probability: int = 20  # Probabilité de base en pourcentage
 
 @dataclass
 class Continent:
@@ -54,24 +55,25 @@ class WeatherGame:
         ]
 
     def initialize_disasters(self):
+        """Initialize disasters with their base probability"""
         disasters = {
             "Europe": [
-                Disaster("Inondation Européenne", 1, 4, "flood", "Europe"),
-                Disaster("Tempête Hivernale", 1, 3, "wind", "Europe"),
-                Disaster("Vague de Chaleur Méditerranéenne", 1, 3, "fire", "Europe"),
-                Disaster("Éruption Volcanique Islandaise", 1, 5, "fire", "Europe"),
-                Disaster("Séisme Méditerranéen", 1, 4, "earthquake", "Europe"),
-                Disaster("Incendie de Forêt en Europe du Sud", 1, 3, "fire", "Europe"),
-                Disaster("Crue Subite des Alpes", 1, 3, "flood", "Europe"),
+                Disaster("Inondation Européenne", 1, 4, "flood", "Europe", base_probability=30),
+                Disaster("Tempête Hivernale", 1, 3, "wind", "Europe", base_probability=25),
+                Disaster("Vague de Chaleur Méditerranéenne", 1, 3, "fire", "Europe", base_probability=20),
+                Disaster("Éruption Volcanique Islandaise", 1, 5, "fire", "Europe", base_probability=10),
+                Disaster("Séisme Méditerranéen", 1, 4, "earthquake", "Europe", base_probability=15),
+                Disaster("Incendie de Forêt en Europe du Sud", 1, 3, "fire", "Europe", base_probability=20),
+                Disaster("Crue Subite des Alpes", 1, 3, "flood", "Europe", base_probability=25),
             ],
             "Asia": [
-                Disaster("Typhon Asiatique", 1, 5, "wind", "Asia"),
-                Disaster("Séisme d'Himalaya", 1, 5, "earthquake", "Asia"),
-                Disaster("Tsunami Pacifique", 1, 5, "flood", "Asia"),
-                Disaster("Inondation de Mousson", 1, 4, "flood", "Asia"),
-                Disaster("Éruption Volcanique Indonésienne", 1, 5, "fire", "Asia"),
-                Disaster("Tempête de Sable Asiatique", 1, 3, "wind", "Asia"),
-                Disaster("Smog Industriel", 1, 2, "other", "Asia"),
+                Disaster("Typhon Asiatique", 1, 5, "wind", "Asia", base_probability=35),
+                Disaster("Séisme d'Himalaya", 1, 5, "earthquake", "Asia", base_probability=20),
+                Disaster("Tsunami Pacifique", 1, 5, "flood", "Asia", base_probability=15),
+                Disaster("Inondation de Mousson", 1, 4, "flood", "Asia", base_probability=40),
+                Disaster("Éruption Volcanique Indonésienne", 1, 5, "fire", "Asia", base_probability=15),
+                Disaster("Tempête de Sable Asiatique", 1, 3, "wind", "Asia", base_probability=25),
+                Disaster("Smog Industriel", 1, 2, "other", "Asia", base_probability=30),
             ],
             "Africa": [
                 Disaster("Sécheresse Sahélienne", 1, 5, "fire", "Africa"),
@@ -137,15 +139,25 @@ class WeatherGame:
         power = disaster.base_power
         
         # Continental Overload (bonus par tranche de 3 habitations)
-        continental_bonus = continent.habitations // 3
+        continental_bonus = continent.habitations // 5
         power += continental_bonus
             
         # Global Pressure (bonus par tranche de 10 habitations)
         total_habitations = sum(c.habitations for c in self.continents.values())
-        global_bonus = total_habitations // 10
+        global_bonus = total_habitations // 20
         power += global_bonus
             
         return min(power, disaster.max_power)
+
+    def get_disaster_probability(self, disaster: Disaster) -> float:
+        """Calculate the current probability of a disaster occurring"""
+        # Augmentation de 1% tous les 2 tours
+        probability_increase = (self.current_turn - 1) // 2
+        
+        # La probabilité augmente mais ne dépasse pas 100%
+        final_probability = min(disaster.base_probability + probability_increase, 100)
+        
+        return final_probability
 
     def simulate_weather(self):
         """Simulate weather events for 2-3 random continents"""
@@ -158,12 +170,23 @@ class WeatherGame:
         for continent_name in target_continents:
             continent = self.continents[continent_name]
             if continent.disasters:
-                disaster = random.choice(continent.disasters)
-                power = self.calculate_disaster_power(disaster, continent)
+                potential_disasters = []
+                # Vérifie chaque catastrophe possible
+                for disaster in continent.disasters:
+                    probability = self.get_disaster_probability(disaster)
+                    if random.random() * 100 < probability:
+                        potential_disasters.append(disaster)
                 
-                print(f"\n{continent.name} subit: {disaster.name}")
-                print(f"Puissance: {power}")
-                
+                if potential_disasters:
+                    disaster = random.choice(potential_disasters)
+                    power = self.calculate_disaster_power(disaster, continent)
+                    
+                    print(f"\n{continent.name} subit: {disaster.name}")
+                    print(f"Probabilité: {self.get_disaster_probability(disaster):.0f}%")
+                    print(f"Puissance: {power}")
+                else:
+                    print(f"\n{continent.name}: Pas de catastrophe ce tour")
+        
         print("\nAppuyez sur Entrée pour continuer...")
         input()
 
