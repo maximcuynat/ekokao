@@ -146,14 +146,6 @@ class WeatherGame:
         total_habitations = sum(c.habitations for c in self.continents.values())
         global_bonus = total_habitations // 10
         power += global_bonus
-        
-        # Afficher les détails du calcul
-        print(f"   Base: {disaster.base_power}")
-        if continental_bonus > 0:
-            print(f"   Bonus continental ({continent.habitations} habitations): +{continental_bonus}")
-        if global_bonus > 0:
-            print(f"   Bonus global ({total_habitations} habitations totales): +{global_bonus}")
-        print(f"   Puissance finale: {min(power, disaster.max_power)} (max: {disaster.max_power})")
             
         return min(power, disaster.max_power)
 
@@ -171,22 +163,10 @@ class WeatherGame:
                 disaster = random.choice(continent.disasters)
                 power = self.calculate_disaster_power(disaster, continent)
                 
-                print(f"\n🌪️  {continent.name} subit: {disaster.name}")
-                print(f"Type: {disaster.disaster_type}")
-                print(f"Puissance initiale: {disaster.base_power}")
+                print(f"\n{continent.name} subit: {disaster.name}")
+                print(f"Puissance: {power}")
                 
-                # Calcul des bonus
-                total_habitations = sum(c.habitations for c in self.continents.values())
-                continental_bonus = continent.habitations // 3
-                global_bonus = total_habitations // 10
-                
-                print(f"Bonus continental ({continent.habitations} habitations): +{continental_bonus}")
-                print(f"Bonus global ({total_habitations} total): +{global_bonus}")
-                print(f"Puissance finale: {power} (max possible: {disaster.max_power})")
-                
-                sleep(1)  # Dramatic pause
-                
-        sleep(2)  # Give time to read all events
+        input("\nAppuyez sur Entrée pour continuer...")
 
     def next_turn(self):
         """Advance to the next turn"""
